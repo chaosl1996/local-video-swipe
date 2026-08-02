@@ -1,0 +1,28 @@
+# 视频文件（用户本地数据，不入库；保留目录结构）
+videos/*
+!videos/.gitkeep
+
+# Docker 镜像产物（通过 GitHub Release 分发，不入库）
+*.tar.gz
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志
+*.log
+/tmp/

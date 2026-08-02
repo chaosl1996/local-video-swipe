@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>本地视频</title>
+  <link rel="stylesheet" href="/style.css?v=5" />
+</head>
+<body>
+  <div id="app">
+    <!-- 视频容器：三个 slot，prev 在上/current 中/next 下。feed 始终 translateY(-100%) 让 current 显示 -->
+    <div id="feed">
+      <div class="slide" data-slot="prev"><video playsinline webkit-playsinline preload="none"></video></div>
+      <div class="slide active" data-slot="current"><video playsinline webkit-playsinline preload="none"></video></div>
+      <div class="slide" data-slot="next"><video playsinline webkit-playsinline preload="none"></video></div>
+    </div>
+
+    <!-- 顶部状态栏 -->
+    <div id="topbar">
+      <span id="indicator">加载中…</span>
+    </div>
+
+    <!-- 右侧操作栏 -->
+    <div id="sidebar">
+      <div class="side-btn" id="btnMute" title="静音/取消静音">
+        <span class="icon">🔇</span><span class="label">静音</span>
+      </div>
+      <div class="side-btn" id="btnFullscreen" title="全屏">
+        <span class="icon">⛶</span><span class="label">全屏</span>
+      </div>
+      <div class="side-btn" id="btnSettings" title="设置">
+        <span class="icon">⚙️</span><span class="label">设置</span>
+      </div>
+    </div>
+
+    <!-- 底部信息 + 进度条 -->
+    <div id="bottombar">
+      <div id="info"></div>
+      <div id="progress-wrap">
+        <span id="time-current">0:00</span>
+        <div id="progress-bar">
+          <div id="progress-buffered"></div>
+          <div id="progress-played"></div>
+          <div id="progress-thumb"></div>
+        </div>
+        <span id="time-total">0:00</span>
+      </div>
+      <div id="hint">上滑下一个 · 单击暂停 · 长按快进 · 右滑删除 · 左滑移动</div>
+    </div>
+
+    <!-- 格式不支持提示 -->
+    <div id="error-badge" class="hidden">
+      <div class="err-icon">⚠️</div>
+      <div class="err-text">该视频格式浏览器无法直接播放</div>
+      <div class="err-hint">建议转换为 MP4 (H.264 + AAC)</div>
+    </div>
+
+    <!-- 长按快进提示 -->
+    <div id="speed-badge">2.0x ⏩</div>
+
+    <!-- 暂停状态提示 -->
+    <div id="play-badge">▶</div>
+
+    <!-- 左侧操作栏（右滑出现：删除当前视频） -->
+    <div id="left-panel" class="hidden">
+      <div class="lp-card">
+        <div class="lp-title">视频操作</div>
+        <button id="btnDelete" class="danger">🗑️ 删除当前视频</button>
+        <div class="lp-hint">删除后不可恢复</div>
+        <button id="btnLeftClose" class="secondary">取消</button>
+      </div>
+    </div>
+
+    <!-- 文件夹移动面板（左滑出现） -->
+    <div id="move-panel" class="hidden">
+      <div class="lp-card">
+        <div class="lp-title">移动到文件夹</div>
+        <div id="move-folder-list" class="move-list"></div>
+        <div class="lp-title" style="margin-top:14px;">或新建文件夹</div>
+        <div class="new-folder-row">
+          <input type="text" id="new-folder-input" placeholder="文件夹名" maxlength="40" />
+          <button id="btnNewFolder">新建</button>
+        </div>
+        <button id="btnMoveClose" class="secondary">取消</button>
+      </div>
+    </div>
+
+    <!-- 设置面板 -->
+    <div id="settings-panel" class="hidden">
+      <div class="panel-card">
+        <div class="panel-title">播放模式</div>
+        <div class="mode-list">
+          <label><input type="radio" name="mode" value="all-random" /> 全随机（所有文件夹）</label>
+          <label><input type="radio" name="mode" value="folder-random" checked /> 文件夹内随机</label>
+          <label><input type="radio" name="mode" value="folder-seq" /> 文件夹内顺序</label>
+        </div>
+
+        <div class="panel-title" style="margin-top:16px;">文件夹</div>
+        <select id="folder-select"></select>
+
+        <div class="panel-title" style="margin-top:16px;">播放选项</div>
+        <label class="opt-toggle">
+          <input type="checkbox" id="opt-autonext" checked />
+          <span>播放完自动翻到下一个</span>
+        </label>
+
+        <div class="panel-title" style="margin-top:16px;">操作</div>
+        <div class="row">
+          <button id="btnRefresh">刷新目录</button>
+          <button id="btnClose">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 自定义确认/提示弹窗（替代原生 confirm/alert，可限制宽度） -->
+  <div id="modal" class="overlay hidden">
+    <div class="modal-card">
+      <div id="modalMsg" class="modal-msg"></div>
+      <div class="modal-actions">
+        <button id="modalCancel" class="btn-secondary">取消</button>
+        <button id="modalOk" class="btn-danger">确定</button>
+      </div>
+    </div>
+  </div>
+  <script src="/app.js?v=5"></script>
+</body>
+</html>

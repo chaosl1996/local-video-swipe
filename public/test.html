@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>视频测试</title></head>
+<body style="margin:0;background:#000;">
+<video id="v" controls autoplay loop style="width:100vw;height:100vh;object-fit:contain;"></video>
+<script>
+  // 直接用第一个视频测试
+  fetch('/api/folders').then(r=>r.json()).then(d=>{
+    return fetch('/api/videos?folder='+encodeURIComponent(d.folders[0].folder));
+  }).then(r=>r.json()).then(d=>{
+    const v = document.getElementById('v');
+    v.src = '/api/stream/' + d.videos[0].id;
+    v.muted = false;
+    v.play();
+    v.addEventListener('playing', ()=>console.log('PLAYING', v.videoWidth, v.videoHeight));
+    v.addEventListener('error', ()=>console.log('ERROR', v.error));
+    v.addEventListener('loadeddata', ()=>console.log('LOADED', v.videoWidth, v.videoHeight));
+  });
+</script>
+</body>
+</html>

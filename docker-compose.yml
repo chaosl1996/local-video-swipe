@@ -1,0 +1,20 @@
+services:
+  video:
+    build:
+      context: .
+      # 显式构建 x86 镜像（部署到 x86 主机用）
+      platforms:
+        - linux/amd64
+    image: local-video-swipe:latest
+    container_name: local-video
+    ports:
+      - "3000:3000"
+    volumes:
+      # 挂载本地视频目录到容器内（左侧改成你的视频目录绝对路径）
+      - ./videos:/app/videos
+    environment:
+      - PORT=3000
+      - TZ=Asia/Shanghai
+      # 如不想用默认 /app/videos，可改 VIDEOS_DIR 指向容器内其它挂载点
+      # - VIDEOS_DIR=/media/videos
+    restart: unless-stopped
