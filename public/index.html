@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>本地视频</title>
-  <link rel="stylesheet" href="/style.css?v=6" />
+  <link rel="stylesheet" href="/style.css?v=7" />
 </head>
 <body>
   <div id="app">
@@ -53,6 +53,8 @@
       <div class="err-icon">⚠️</div>
       <div class="err-text">该视频格式浏览器无法直接播放</div>
       <div class="err-hint">建议转换为 MP4 (H.264 + AAC)</div>
+      <button id="btnConvert" class="convert-btn hidden">转换为 MP4</button>
+      <div id="convert-status" class="convert-status hidden"></div>
     </div>
 
     <!-- 长按快进提示 -->
@@ -123,6 +125,6 @@
       </div>
     </div>
   </div>
-  <script src="/app.js?v=6"></script>
+  <script src="/app.js?v=7"></script>
 </body>
 </html>

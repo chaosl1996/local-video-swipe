@@ -4,6 +4,10 @@
 
 FROM python:3.13-slim
 
+# 安装 ffmpeg（用于转码 avi/mov/mkv 等不支持的格式为 MP4）
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # 设置时区与语言
 ENV TZ=Asia/Shanghai \
     PYTHONUNBUFFERED=1 \

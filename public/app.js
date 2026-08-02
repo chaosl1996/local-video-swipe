@@ -41,6 +41,9 @@ const infoEl = document.getElementById('info');
 const speedBadge = document.getElementById('speed-badge');
 const playBadge = document.getElementById('play-badge');
 const errorBadge = document.getElementById('error-badge');
+const btnConvert = document.getElementById('btnConvert');
+const convertStatus = document.getElementById('convert-status');
+let ffmpegAvailable = false;
 const settingsPanel = document.getElementById('settings-panel');
 const folderSelect = document.getElementById('folder-select');
 const btnMute = document.getElementById('btnMute');
@@ -214,6 +217,13 @@ function loadSlot(slotName, videoMeta) {
     v.onerror = () => {
       console.error('[video error]', v.error, 'code=', v.error && v.error.code, 'src=', v.src);
       errorBadge.classList.remove('hidden');
+      // ffmpeg 可用时显示转码按钮
+      if (ffmpegAvailable) {
+        btnConvert.classList.remove('hidden');
+        convertStatus.classList.add('hidden');
+      } else {
+        btnConvert.classList.add('hidden');
+      }
       v.pause();
     };
     bindProgressEvents(v);
@@ -873,6 +883,12 @@ Object.values(videos).forEach((v) => {
 
 // ==================== 初始化 ====================
 async function init() {
+  // 检查服务端是否安装了 ffmpeg（决定是否显示转码按钮）
+  try {
+    const r = await fetch('/api/ffmpeg-check');
+    const d = await r.json();
+    ffmpegAvailable = !!d.available;
+  } catch (e) { /* 默认不可用 */ }
   await loadFolders();
   if (state.allVideos.length === 0) {
     indicator.textContent = '没有视频';
@@ -884,5 +900,36 @@ async function init() {
   btnMute.querySelector('.icon').textContent = state.muted ? '🔇' : '🔊';
   btnMute.querySelector('.label').textContent = state.muted ? '取消静音' : '静音';
 }
+
+// 转码按钮：将不支持的视频转为 MP4
+btnConvert.addEventListener('click', async () => {
+  const cur = state.slots.current;
+  if (!cur) return;
+  btnConvert.classList.add('hidden');
+  convertStatus.classList.remove('hidden');
+  convertStatus.textContent = '转码中，请稍候…';
+  try {
+    const r = await fetch('/api/convert/' + cur.id, { method: 'POST' });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || '转码失败');
+    // 更新本地数据：用新 id 替换
+    const v = state.allVideos.find((v) => v.id === data.old_id);
+    if (v) {
+      v.id = data.new_id;
+      if (data.new_name) v.name = data.new_name;
+    }
+    state.folders = data.folders;
+    updateFolderSelect(data.folders);
+    convertStatus.textContent = '转码完成，正在加载…';
+    // 重新加载播放
+    setTimeout(() => {
+      convertStatus.classList.add('hidden');
+      rebuildAndPlay();
+    }, 500);
+  } catch (e) {
+    convertStatus.textContent = '转码失败: ' + e.message;
+    btnConvert.classList.remove('hidden');
+  }
+});
 
 init();

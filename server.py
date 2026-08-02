@@ -17,6 +17,7 @@ import json
 import shutil
 import hashlib
 import mimetypes
+import subprocess
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -27,6 +28,9 @@ VIDEOS_DIR = os.environ.get(
 
 VIDEO_EXT = {'.mp4', '.webm', '.mov', '.mkv', '.m4v', '.avi', '.ogv'}
 PORT = int(os.environ.get('PORT', '3000'))
+
+# 检测 ffmpeg 是否可用（用于转码不支持的格式）
+FFMPEG_BIN = shutil.which('ffmpeg')
 
 # 启动时建立的索引: id -> {abs, folder, name}
 VIDEO_INDEX = {}
@@ -114,6 +118,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.api_folders()
         if path == '/api/videos':
             return self.api_videos(qs)
+        if path == '/api/ffmpeg-check':
+            return self.send_json({'available': FFMPEG_BIN is not None})
         if path.startswith('/api/stream/'):
             vid_id = path[len('/api/stream/'):]
             return self.api_stream(vid_id)
@@ -132,6 +138,9 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith('/api/videos/') and path.endswith('/move'):
             vid_id = path[len('/api/videos/'):-len('/move')]
             return self.api_move_video(vid_id)
+        if path.startswith('/api/convert/'):
+            vid_id = path[len('/api/convert/'):]
+            return self.api_convert_video(vid_id)
         self.send_text('Not Found', 404)
 
     def do_DELETE(self):
@@ -248,6 +257,57 @@ class Handler(BaseHTTPRequestHandler):
             'new_id': new_id,
             'new_folder': '/' if dest_folder == '' else dest_folder,
             'new_name': os.path.basename(dst),
+        })
+
+    def api_convert_video(self, vid_id):
+        """用 ffmpeg 将不支持的视频转为 MP4 (H.264 + AAC + faststart)。"""
+        if not FFMPEG_BIN:
+            return self.send_json({'ok': False, 'error': '服务器未安装 ffmpeg'}, 503)
+        meta = VIDEO_INDEX.get(vid_id)
+        if not meta:
+            return self.send_json({'ok': False, 'error': '视频不存在'}, 404)
+        src = meta['abs']
+        if not os.path.isfile(src):
+            return self.send_json({'ok': False, 'error': '文件不存在'}, 404)
+        # 已经是 mp4 不需要转
+        ext = os.path.splitext(src)[1].lower()
+        if ext == '.mp4':
+            return self.send_json({'ok': False, 'error': '已经是 MP4 格式'}, 400)
+        # 输出路径：同目录下同名 .mp4
+        base = os.path.splitext(src)[0]
+        out_path = base + '.mp4'
+        if os.path.exists(out_path):
+            out_path = base + '_converted.mp4'
+        # ffmpeg: H.264 + AAC + faststart，preset=fast 平衡速度与质量
+        cmd = [
+            FFMPEG_BIN, '-y', '-i', src,
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+            '-c:a', 'aac', '-b:a', '128k',
+            '-movflags', '+faststart',
+            out_path,
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            if result.returncode != 0:
+                err = (result.stderr or '')[-500:]
+                return self.send_json({'ok': False, 'error': '转码失败: ' + err}, 500)
+        except subprocess.TimeoutExpired:
+            return self.send_json({'ok': False, 'error': '转码超时（10分钟限制）'}, 504)
+        except OSError as e:
+            return self.send_json({'ok': False, 'error': str(e)}, 500)
+        # 转码成功，删除原文件
+        try:
+            os.remove(src)
+        except OSError:
+            pass
+        folders = build_index()
+        new_id = hashlib.sha1(out_path.encode('utf-8')).hexdigest()[:16]
+        self.send_json({
+            'ok': True,
+            'folders': folders,
+            'old_id': vid_id,
+            'new_id': new_id,
+            'new_name': os.path.basename(out_path),
         })
 
     def api_stream(self, vid_id):
