@@ -201,6 +201,7 @@ function loadSlot(slotName, videoMeta) {
   v.ontimeupdate = null;
   v.onprogress = null;
   v.onloadedmetadata = null;
+  if (v._errorTimer) { clearTimeout(v._errorTimer); v._errorTimer = null; }
   if (!videoMeta) {
     v.pause();
     v.removeAttribute('src');
@@ -217,16 +218,17 @@ function loadSlot(slotName, videoMeta) {
   if (slotName === 'current') {
     v.onerror = () => {
       console.error('[video error]', v.error, 'code=', v.error && v.error.code, 'src=', v.src);
-      errorBadge.classList.remove('hidden');
-      // ffmpeg 可用时显示转码按钮
-      if (ffmpegAvailable) {
-        btnConvert.classList.remove('hidden');
-        convertStatus.classList.add('hidden');
-      } else {
-        btnConvert.classList.add('hidden');
-      }
+      showErrorBadge();
       v.pause();
     };
+    // 兜底：浏览器可能不报错但无法解码（黑屏），4 秒内无画面则提示
+    if (v._errorTimer) clearTimeout(v._errorTimer);
+    v._errorTimer = setTimeout(() => {
+      if (v.readyState < 2 && !v.paused) {
+        console.warn('[video] 4s 无画面，疑似无法解码', v.src);
+        showErrorBadge();
+      }
+    }, 4000);
     bindProgressEvents(v);
   }
 }
@@ -236,6 +238,17 @@ let userInteracted = false;
 ['touchstart', 'mousedown', 'keydown'].forEach((evt) => {
   window.addEventListener(evt, () => { userInteracted = true; }, { once: true, capture: true });
 });
+
+// 显示错误提示（含转码按钮，如果服务端有 ffmpeg）
+function showErrorBadge() {
+  errorBadge.classList.remove('hidden');
+  if (ffmpegAvailable) {
+    btnConvert.classList.remove('hidden');
+    convertStatus.classList.add('hidden');
+  } else {
+    btnConvert.classList.add('hidden');
+  }
+}
 
 function playCurrent() {
   const cur = state.slots.current;
@@ -752,6 +765,8 @@ function bindProgressEvents(v) {
   v.onloadedmetadata = () => {
     timeTotal.textContent = formatTime(v.duration);
     updateProgress(v);
+    // 元数据加载成功，清除错误检测计时器
+    if (v._errorTimer) { clearTimeout(v._errorTimer); v._errorTimer = null; }
   };
 }
 
