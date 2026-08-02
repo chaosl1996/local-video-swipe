@@ -352,7 +352,9 @@ feed.addEventListener('touchstart', (e) => {
   touchStartX = e.touches[0].clientX;
   moved = false;
   startLongPress();
-}, { passive: true });
+  // 阻止默认行为（防止 iOS/安卓触发额外手势或延迟点击）
+  e.preventDefault();
+}, { passive: false });
 
 feed.addEventListener('touchmove', (e) => {
   const dy = e.touches[0].clientY - touchStartY;

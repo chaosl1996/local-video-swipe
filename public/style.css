@@ -47,6 +47,9 @@ html, body {
   object-fit: contain;
   background: #000;
   display: block;
+  /* 关键：禁用 video 元素自身的事件捕获，让所有触摸/鼠标事件
+     直接由 #feed 容器统一处理，避免 iOS/华为/桌面端手势冲突 */
+  pointer-events: none;
 }
 
 /* 顶部 */
