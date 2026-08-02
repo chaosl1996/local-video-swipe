@@ -347,13 +347,14 @@ feed.addEventListener('touchstart', (e) => {
 feed.addEventListener('touchmove', (e) => {
   const dy = e.touches[0].clientY - touchStartY;
   const dx = e.touches[0].clientX - touchStartX;
-  // 提高阈值到 15px，避免手指轻微抖动被误判为滑动（安卓更敏感）
-  if (Math.abs(dy) > 15 || Math.abs(dx) > 15) {
+  // 提高阈值到 18px，避免手指轻微抖动被误判为滑动（安卓更敏感）
+  if (Math.abs(dy) > 18 || Math.abs(dx) > 18) {
     moved = true;
     cancelLongPress();
   }
-  // 阻止 iOS Safari 默认滚动行为（防止 feed 容器被滚动导致后续触摸失效）
-  if (moved) e.preventDefault();
+  // 始终阻止默认行为：iOS Safari 一旦发现 touchmove 未 preventDefault，
+  // 会立即启动默认滚动/手势，劫持后续触摸事件流，导致滑动失效
+  e.preventDefault();
 }, { passive: false });
 
 feed.addEventListener('touchend', (e) => {
@@ -366,11 +367,14 @@ feed.addEventListener('touchend', (e) => {
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
       if (dx > 0) deleteCurrentVideo();
       else showMovePanel();
+      e.preventDefault();
+      return;
     } else if (Math.abs(dy) > 60) {
       goTo(dy < 0 ? 1 : -1);
+      e.preventDefault();
+      return;
     }
-    e.preventDefault();
-    return;
+    // moved 但不满足滑动阈值（如华为手机轻微抖动）→ 当作点击处理
   }
   // 单击切换暂停/继续；长按快进松开后不切换
   if (!wasLongPress) {
