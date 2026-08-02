@@ -164,10 +164,14 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- API ----------
     def api_folders(self):
         folders = build_index()
+        # 直接返回所有视频列表，避免前端逐个文件夹发请求（慢）
+        videos = [{'id': vid_id, 'folder': m['folder'], 'name': m['name']}
+                  for vid_id, m in VIDEO_INDEX.items()]
         self.send_json({
             'root': VIDEOS_DIR,
             'total': len(VIDEO_INDEX),
             'folders': folders,
+            'videos': videos,
         })
 
     def api_videos(self, qs):

@@ -133,18 +133,11 @@ function pickRandom(arr, excludeId) {
 
 // ==================== 数据加载 ====================
 async function loadFolders() {
+  // 单次请求拿全部文件夹 + 视频列表（避免逐文件夹串行请求导致卡顿）
   const r = await fetch('/api/folders');
   const data = await r.json();
-  state.folders = data.folders;
-  state.allVideos = [];
-
-  // 拉取每个文件夹的视频列表
-  for (const f of data.folders) {
-    const vr = await fetch('/api/videos?folder=' + encodeURIComponent(f.folder));
-    const vdata = await vr.json();
-    vdata.videos.forEach((v) => state.allVideos.push(v));
-  }
-
+  state.folders = data.folders || [];
+  state.allVideos = data.videos || [];
   updateFolderSelect(state.folders);
 }
 
