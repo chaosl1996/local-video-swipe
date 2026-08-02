@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>本地视频</title>
-  <link rel="stylesheet" href="/style.css?v=8" />
+  <link rel="stylesheet" href="/style.css?v=9" />
 </head>
 <body>
   <div id="app">
@@ -14,6 +14,8 @@
       <div class="slide active" data-slot="current"><video playsinline webkit-playsinline preload="none"></video></div>
       <div class="slide" data-slot="next"><video playsinline webkit-playsinline preload="none"></video></div>
     </div>
+    <!-- 触摸/鼠标捕获层：覆盖整个视频区，统一处理所有手势，与 video 元素完全解耦 -->
+    <div id="touch-layer"></div>
 
     <!-- 顶部状态栏 -->
     <div id="topbar">
@@ -125,6 +127,6 @@
       </div>
     </div>
   </div>
-  <script src="/app.js?v=8"></script>
+  <script src="/app.js?v=9"></script>
 </body>
 </html>

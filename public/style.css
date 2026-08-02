@@ -52,6 +52,18 @@ html, body {
   pointer-events: none;
 }
 
+/* 触摸/鼠标捕获层：覆盖整个视频区，统一处理所有手势，完全不经过 video 元素 */
+#touch-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
 /* 顶部 */
 #topbar {
   position: absolute;
@@ -60,7 +72,7 @@ html, body {
   padding-top: calc(12px + env(safe-area-inset-top));
   background: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);
   font-size: 13px;
-  z-index: 10;
+  z-index: 20;
   pointer-events: none;
 }
 
@@ -72,7 +84,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 22px;
-  z-index: 10;
+  z-index: 20;
 }
 
 .side-btn {
@@ -107,7 +119,7 @@ html, body {
   padding: 16px;
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
   background: linear-gradient(to top, rgba(0,0,0,0.55), transparent);
-  z-index: 10;
+  z-index: 20;
   pointer-events: none;
 }
 

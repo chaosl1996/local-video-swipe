@@ -1,5 +1,5 @@
 // ==================== 状态 ====================
-console.log('[app.js v5] loaded at', new Date().toISOString());
+console.log('[app.js v9] loaded at', new Date().toISOString());
 const state = {
   folders: [],          // [{ folder, count }]
   allVideos: [],        // [{ id, folder, name }]
@@ -26,6 +26,7 @@ const SPEED_UP_RATE = 2.0;
 
 // ==================== DOM ====================
 const feed = document.getElementById('feed');
+const touchLayer = document.getElementById('touch-layer');
 const slides = {
   prev: document.querySelector('[data-slot="prev"]'),
   current: document.querySelector('[data-slot="current"]'),
@@ -342,58 +343,112 @@ function goTo(direction) {
 }
 
 // ==================== 手势 ====================
-let touchStartY = 0;
-let touchStartX = 0;
-let moved = false;
+// 说明：所有触摸/鼠标事件统一挂在 #touch-layer（全屏透明层）上，
+// 完全不经过 video 元素，彻底避免 iOS/华为/桌面端与 video 自带手势冲突。
 
-feed.addEventListener('touchstart', (e) => {
+const SWIPE_THRESHOLD = 70;      // 滑动触发距离（px）
+const MOVE_THRESHOLD = 20;       // 判定为"移动过"的阈值（与单击区分）
+const LONG_PRESS_MS = 500;       // 长按判定时间
+let gesture = null;
+
+// --- 触摸事件 ---
+touchLayer.addEventListener('touchstart', (e) => {
   if (e.touches.length !== 1) return;
-  touchStartY = e.touches[0].clientY;
-  touchStartX = e.touches[0].clientX;
-  moved = false;
+  const t = e.touches[0];
+  gesture = {
+    phase: 'start',
+    x: t.clientX, y: t.clientY,
+    moved: false, wasLongPress: false,
+  };
   startLongPress();
-  // 阻止默认行为（防止 iOS/安卓触发额外手势或延迟点击）
   e.preventDefault();
 }, { passive: false });
 
-feed.addEventListener('touchmove', (e) => {
-  const dy = e.touches[0].clientY - touchStartY;
-  const dx = e.touches[0].clientX - touchStartX;
-  // 提高阈值到 18px，避免手指轻微抖动被误判为滑动（安卓更敏感）
-  if (Math.abs(dy) > 18 || Math.abs(dx) > 18) {
-    moved = true;
+touchLayer.addEventListener('touchmove', (e) => {
+  if (!gesture || gesture.phase !== 'start') return;
+  const t = e.touches[0];
+  const dx = t.clientX - gesture.x;
+  const dy = t.clientY - gesture.y;
+  if (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD) {
+    gesture.moved = true;
     cancelLongPress();
   }
-  // 始终阻止默认行为：iOS Safari 一旦发现 touchmove 未 preventDefault，
-  // 会立即启动默认滚动/手势，劫持后续触摸事件流，导致滑动失效
   e.preventDefault();
 }, { passive: false });
 
-feed.addEventListener('touchend', (e) => {
+touchLayer.addEventListener('touchend', (e) => {
+  if (!gesture) return;
   const wasLongPress = state.isLongPressing;
   cancelLongPress();
-  if (moved) {
-    const dy = e.changedTouches[0].clientY - touchStartY;
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    // 水平滑动优先
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
+  const t = e.changedTouches[0];
+  const dx = t.clientX - gesture.x;
+  const dy = t.clientY - gesture.y;
+  if (gesture.moved) {
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    if (adx > ady && adx > SWIPE_THRESHOLD) {
       if (dx > 0) deleteCurrentVideo();
       else showMovePanel();
-      e.preventDefault();
-      return;
-    } else if (Math.abs(dy) > 60) {
+    } else if (ady > SWIPE_THRESHOLD) {
       goTo(dy < 0 ? 1 : -1);
-      e.preventDefault();
-      return;
     }
-    // moved 但不满足滑动阈值（如华为手机轻微抖动）→ 当作点击处理
-  }
-  // 单击切换暂停/继续；长按快进松开后不切换
-  if (!wasLongPress) {
+    // 移动过但不够滑动阈值 → 视为误操作，不触发任何动作
+  } else if (!wasLongPress) {
+    // 没移动过且非长按 → 单击暂停/继续
     togglePlay();
   }
+  gesture = null;
   e.preventDefault();
 }, { passive: false });
+
+touchLayer.addEventListener('touchcancel', (e) => {
+  cancelLongPress();
+  gesture = null;
+  e.preventDefault();
+}, { passive: false });
+
+// --- 鼠标事件（桌面端）---
+touchLayer.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  gesture = {
+    phase: 'start',
+    x: e.clientX, y: e.clientY,
+    moved: false, wasLongPress: false,
+  };
+  startLongPress();
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (!gesture || gesture.phase !== 'start') return;
+  const dx = e.clientX - gesture.x;
+  const dy = e.clientY - gesture.y;
+  if (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD) {
+    gesture.moved = true;
+    cancelLongPress();
+  }
+});
+
+window.addEventListener('mouseup', (e) => {
+  if (!gesture) return;
+  if (e.button !== 0) { gesture = null; return; }
+  const wasLongPress = state.isLongPressing;
+  cancelLongPress();
+  const dx = e.clientX - gesture.x;
+  const dy = e.clientY - gesture.y;
+  if (gesture.moved) {
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    if (adx > ady && adx > SWIPE_THRESHOLD) {
+      if (dx > 0) deleteCurrentVideo();
+      else showMovePanel();
+    } else if (ady > SWIPE_THRESHOLD) {
+      goTo(dy < 0 ? 1 : -1);
+    }
+  } else if (!wasLongPress) {
+    togglePlay();
+  }
+  gesture = null;
+});
+
+window.addEventListener('mouseleave', cancelLongPress);
 
 // 鼠标滚轮（桌面端）
 let wheelLock = false;
@@ -420,52 +475,6 @@ window.addEventListener('keydown', (e) => {
     const v = videos.current; if (v && v.duration) v.currentTime = Math.min(v.duration, v.currentTime + 5);
   }
 });
-
-// 桌面端鼠标：按下启动长按计时，松开时若未移动且未长按则切换暂停
-let mouseStartX = 0;
-let mouseStartY = 0;
-let mouseMoved = false;
-let mouseDownInFeed = false;
-
-feed.addEventListener('mousedown', (e) => {
-  if (e.button !== 0) return; // 仅左键
-  mouseStartX = e.clientX;
-  mouseStartY = e.clientY;
-  mouseMoved = false;
-  mouseDownInFeed = true;
-  startLongPress();
-});
-
-window.addEventListener('mousemove', (e) => {
-  if (!mouseDownInFeed) return;
-  if (Math.abs(e.clientX - mouseStartX) > 10 ||
-      Math.abs(e.clientY - mouseStartY) > 10) {
-    mouseMoved = true;
-    cancelLongPress();
-  }
-});
-
-window.addEventListener('mouseup', (e) => {
-  if (e.button !== 0) return;
-  const wasLongPress = state.isLongPressing;
-  cancelLongPress();
-  // 桌面端拖拽滑动检测
-  if (mouseDownInFeed && mouseMoved && !wasLongPress) {
-    const dx = e.clientX - mouseStartX;
-    const dy = e.clientY - mouseStartY;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
-      if (dx > 0) deleteCurrentVideo();
-      else showMovePanel();
-    } else if (Math.abs(dy) > 60) {
-      goTo(dy < 0 ? 1 : -1);
-    }
-  }
-  const shouldToggle = mouseDownInFeed && !mouseMoved && !wasLongPress;
-  mouseDownInFeed = false;
-  if (shouldToggle) togglePlay();
-});
-
-window.addEventListener('mouseleave', cancelLongPress);
 
 // ==================== 长按快进 ====================
 function startLongPress() {
