@@ -1,5 +1,5 @@
 // ==================== 状态 ====================
-console.log('[app.js v9] loaded at', new Date().toISOString());
+console.log('[app.js v13] loaded at', new Date().toISOString());
 const state = {
   folders: [],          // [{ folder, count }]
   allVideos: [],        // [{ id, folder, name }]
@@ -58,17 +58,8 @@ const modal = document.getElementById('modal');
 const modalMsg = document.getElementById('modalMsg');
 const modalOk = document.getElementById('modalOk');
 const modalCancel = document.getElementById('modalCancel');
-// 显示弹窗前先退出全屏：全屏元素会创建顶层堆叠上下文，
-// 外部 DOM（含 #modal）无论 z-index 多大都无法盖在全屏之上
-// 注意 exitFullscreen 是异步的，必须等全屏真正退出后再显示弹窗
-async function exitFullscreenBeforeModal() {
-  if (!isFullscreen()) return;
-  try { await exitFullscreen(); } catch (e) {}
-  // 给浏览器一点时间完成全屏退出（fullscreenchange 事件触发）
-  await new Promise(r => setTimeout(r, 150));
-}
-async function showConfirm(msg) {
-  await exitFullscreenBeforeModal();
+// #modal 已移入 #app 内部，全屏 #app 时作为子元素可正常显示，无需退出全屏
+function showConfirm(msg) {
   return new Promise((resolve) => {
     modalMsg.textContent = msg;
     modalCancel.style.display = '';
@@ -87,8 +78,7 @@ async function showConfirm(msg) {
     modal.addEventListener('click', onBackdrop);
   });
 }
-async function showAlert(msg) {
-  await exitFullscreenBeforeModal();
+function showAlert(msg) {
   return new Promise((resolve) => {
     modalMsg.textContent = msg;
     modalCancel.style.display = 'none';
@@ -520,15 +510,13 @@ function cancelLongPress() {
 }
 
 // ==================== 删除 / 移动 / 新建文件夹 ====================
-async function showLeftPanel() {
+function showLeftPanel() {
   if (!state.slots.current) return;
-  await exitFullscreenBeforeModal();
   leftPanel.classList.remove('hidden');
 }
 
-async function showMovePanel() {
+function showMovePanel() {
   if (!state.slots.current) return;
-  await exitFullscreenBeforeModal();
   renderMoveFolderList();
   movePanel.classList.remove('hidden');
 }
@@ -685,8 +673,7 @@ function toggleMute() {
 
 btnMute.addEventListener('click', toggleMute);
 
-btnSettings.addEventListener('click', async () => {
-  await exitFullscreenBeforeModal();
+btnSettings.addEventListener('click', () => {
   settingsPanel.classList.remove('hidden');
 });
 
