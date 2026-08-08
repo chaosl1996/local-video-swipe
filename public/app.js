@@ -60,11 +60,15 @@ const modalOk = document.getElementById('modalOk');
 const modalCancel = document.getElementById('modalCancel');
 // 显示弹窗前先退出全屏：全屏元素会创建顶层堆叠上下文，
 // 外部 DOM（含 #modal）无论 z-index 多大都无法盖在全屏之上
-function exitFullscreenBeforeModal() {
-  if (isFullscreen()) exitFullscreen();
+// 注意 exitFullscreen 是异步的，必须等全屏真正退出后再显示弹窗
+async function exitFullscreenBeforeModal() {
+  if (!isFullscreen()) return;
+  try { await exitFullscreen(); } catch (e) {}
+  // 给浏览器一点时间完成全屏退出（fullscreenchange 事件触发）
+  await new Promise(r => setTimeout(r, 150));
 }
-function showConfirm(msg) {
-  exitFullscreenBeforeModal();
+async function showConfirm(msg) {
+  await exitFullscreenBeforeModal();
   return new Promise((resolve) => {
     modalMsg.textContent = msg;
     modalCancel.style.display = '';
@@ -83,8 +87,8 @@ function showConfirm(msg) {
     modal.addEventListener('click', onBackdrop);
   });
 }
-function showAlert(msg) {
-  exitFullscreenBeforeModal();
+async function showAlert(msg) {
+  await exitFullscreenBeforeModal();
   return new Promise((resolve) => {
     modalMsg.textContent = msg;
     modalCancel.style.display = 'none';
@@ -516,15 +520,15 @@ function cancelLongPress() {
 }
 
 // ==================== 删除 / 移动 / 新建文件夹 ====================
-function showLeftPanel() {
+async function showLeftPanel() {
   if (!state.slots.current) return;
-  exitFullscreenBeforeModal();
+  await exitFullscreenBeforeModal();
   leftPanel.classList.remove('hidden');
 }
 
-function showMovePanel() {
+async function showMovePanel() {
   if (!state.slots.current) return;
-  exitFullscreenBeforeModal();
+  await exitFullscreenBeforeModal();
   renderMoveFolderList();
   movePanel.classList.remove('hidden');
 }
@@ -681,8 +685,8 @@ function toggleMute() {
 
 btnMute.addEventListener('click', toggleMute);
 
-btnSettings.addEventListener('click', () => {
-  exitFullscreenBeforeModal();
+btnSettings.addEventListener('click', async () => {
+  await exitFullscreenBeforeModal();
   settingsPanel.classList.remove('hidden');
 });
 
