@@ -58,7 +58,13 @@ const modal = document.getElementById('modal');
 const modalMsg = document.getElementById('modalMsg');
 const modalOk = document.getElementById('modalOk');
 const modalCancel = document.getElementById('modalCancel');
+// 显示弹窗前先退出全屏：全屏元素会创建顶层堆叠上下文，
+// 外部 DOM（含 #modal）无论 z-index 多大都无法盖在全屏之上
+function exitFullscreenBeforeModal() {
+  if (isFullscreen()) exitFullscreen();
+}
 function showConfirm(msg) {
+  exitFullscreenBeforeModal();
   return new Promise((resolve) => {
     modalMsg.textContent = msg;
     modalCancel.style.display = '';
@@ -78,6 +84,7 @@ function showConfirm(msg) {
   });
 }
 function showAlert(msg) {
+  exitFullscreenBeforeModal();
   return new Promise((resolve) => {
     modalMsg.textContent = msg;
     modalCancel.style.display = 'none';
@@ -511,11 +518,13 @@ function cancelLongPress() {
 // ==================== 删除 / 移动 / 新建文件夹 ====================
 function showLeftPanel() {
   if (!state.slots.current) return;
+  exitFullscreenBeforeModal();
   leftPanel.classList.remove('hidden');
 }
 
 function showMovePanel() {
   if (!state.slots.current) return;
+  exitFullscreenBeforeModal();
   renderMoveFolderList();
   movePanel.classList.remove('hidden');
 }
@@ -673,6 +682,7 @@ function toggleMute() {
 btnMute.addEventListener('click', toggleMute);
 
 btnSettings.addEventListener('click', () => {
+  exitFullscreenBeforeModal();
   settingsPanel.classList.remove('hidden');
 });
 
