@@ -1,5 +1,8 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* 通用隐藏类 */
+.hidden { display: none !important; }
+
 html, body {
   height: 100%;
   background: #000;
@@ -64,6 +67,21 @@ html, body {
   -webkit-touch-callout: none;
 }
 
+/* seek 预览画布：手机端暂停态下 seek，浏览器不会把解码后的帧合成到屏幕，
+   用 canvas.drawImage 主动画出。层级：比视频高一点(z=5)，但低于 touch-layer(z=9) 不截手势 */
+#seek-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  display: none;
+  background: #000;
+  object-fit: contain;
+  pointer-events: none;
+}
+#seek-preview.active { display: block; }
+
 /* 顶部 */
 #topbar {
   position: absolute;
@@ -74,6 +92,12 @@ html, body {
   font-size: 13px;
   z-index: 20;
   pointer-events: none;
+}
+/* 可交互子元素需要恢复 pointer-events */
+#topbar button,
+#topbar select,
+#topbar #indicator {
+  pointer-events: auto;
 }
 
 /* 右侧操作 */
@@ -99,15 +123,22 @@ html, body {
 .side-btn:active { transform: scale(0.92); }
 
 .side-btn .icon {
-  font-size: 26px;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.3);
+  background: rgba(0,0,0,0.35);
   border-radius: 50%;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #fff;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.side-btn .icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 .side-btn .label { font-size: 11px; }
@@ -121,6 +152,13 @@ html, body {
   background: linear-gradient(to top, rgba(0,0,0,0.55), transparent);
   z-index: 20;
   pointer-events: none;
+}
+/* 可交互子元素需要恢复 pointer-events */
+#bottombar button,
+#bottombar select,
+#bottombar #info,
+#bottombar #funcbar {
+  pointer-events: auto;
 }
 
 #info { font-size: 13px; opacity: 0.9; margin-bottom: 8px; }
@@ -222,7 +260,8 @@ html, body {
 
 #error-badge.hidden { display: none; }
 
-.err-icon { font-size: 36px; margin-bottom: 8px; }
+.err-icon { margin-bottom: 8px; color: #ffc107; }
+.err-icon svg { width: 44px; height: 44px; }
 .err-text { font-size: 14px; margin-bottom: 6px; }
 .err-hint { font-size: 11px; opacity: 0.65; }
 
@@ -249,26 +288,30 @@ html, body {
 .convert-status.hidden { display: none; }
 
 /* 长按快进提示 */
+/* 速度/进度提示：移到顶部，不遮挡画面中心 */
 #speed-badge {
   position: absolute;
-  top: 50%;
+  top: calc(12px + env(safe-area-inset-top));
   left: 50%;
-  transform: translate(-50%, -50%) scale(0.8);
-  background: rgba(0,0,0,0.7);
-  padding: 10px 20px;
-  border-radius: 24px;
-  font-size: 16px;
+  transform: translate(-50%, -4px) scale(0.92);
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(12px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
   font-weight: 600;
   z-index: 20;
   opacity: 0;
   transition: opacity 0.15s, transform 0.15s;
   pointer-events: none;
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+  line-height: 1.4;
 }
 
 #speed-badge.show {
   opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
+  transform: translate(-50%, 0) scale(1);
 }
 
 /* 暂停状态提示 */
@@ -282,7 +325,6 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 44px;
   color: #fff;
   background: rgba(0,0,0,0.5);
   border-radius: 50%;
@@ -292,37 +334,125 @@ html, body {
   pointer-events: none;
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255,255,255,0.2);
-  padding-left: 8px; /* 视觉居中三角形 */
 }
+#play-badge svg { width: 40px; height: 40px; margin-left: 5px; }
 
 #play-badge.show {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
 }
 
-/* 设置面板 */
+/* 设置面板——与 #app 同级，完全独立的全屏页面 */
 #settings-panel {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
-  z-index: 30;
+  width: 100%;
+  height: 100%;
+  background: #000;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+  flex-direction: column;
+  padding: 0;
+  z-index: 100;
 }
 
 #settings-panel.hidden { display: none; }
 
+/* 设置页打开时：把整个 #app（视频/图片页）隐藏，两个页面完全独立 */
+body.settings-open #app {
+  display: none !important;
+}
+
+.settings-header {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  padding: calc(12px + env(safe-area-inset-top)) 20px 8px;
+  flex-shrink: 0;
+}
+
 .panel-card {
-  background: #1c1c1e;
-  border-radius: 14px;
-  padding: 20px;
-  width: 100%;
-  max-width: 360px;
-  max-height: 80vh;
+  flex: 1;
   overflow-y: auto;
-  border: 1px solid rgba(255,255,255,0.1);
+  padding: 8px 16px 20px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-group {
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.settings-btns {
+  display: flex;
+  gap: 10px;
+}
+.settings-btn {
+  flex: 1;
+  padding: 11px;
+  background: rgba(10,132,255,0.15);
+  color: #0a84ff;
+  border: 1px solid rgba(10,132,255,0.3);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.settings-btn:active { background: rgba(10,132,255,0.3); }
+.auth-status { font-size: 13px; margin-bottom: 8px; }
+
+/* 设置页底部功能栏：与主页面 #funcbar 保持一致 */
+#funcbar-settings {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 48px;
+  padding: 16px 24px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(0,0,0,0.55), transparent);
+  flex-shrink: 0;
+}
+
+/* 滑动选择器行 */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.slider-row input[type="range"] {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  outline: none;
+}
+.slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #0a84ff;
+  cursor: pointer;
+}
+.slider-row input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #0a84ff;
+  cursor: pointer;
+  border: none;
+}
+.slider-row span {
+  min-width: 50px;
+  text-align: right;
+  font-size: 14px;
+  color: #0a84ff;
 }
 
 .panel-title {
@@ -330,16 +460,15 @@ html, body {
   font-weight: 600;
   margin-bottom: 10px;
   color: #8e8e93;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 /* 自定义模态弹窗（替代 confirm/alert） */
 #modal {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
-  z-index: 40;
+  background: rgba(0,0,0,0.75);
+  z-index: 10000;         /* 原 9999 → 升级为 10000：#modal 是"嵌套确认框"，需要比 #move-panel/#left-panel（9999）高，否则同 z-index 时 DOM 顺序 move-panel 在后会盖掉它 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -384,44 +513,57 @@ html, body {
   color: #fff;
 }
 
-.mode-list { display: flex; flex-direction: column; gap: 10px; }
+.mode-list { display: flex; flex-direction: column; gap: 8px; }
 .mode-list label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 14px;
   cursor: pointer;
-  padding: 8px 10px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  transition: background 0.15s;
 }
+.mode-list label:active { background: rgba(255,255,255,0.08); }
+.mode-list input[type="radio"] { accent-color: #0a84ff; width: 18px; height: 18px; }
 
 /* 开关项 */
 .opt-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 14px;
   cursor: pointer;
-  padding: 8px 10px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
 }
 .opt-toggle input { width: 16px; height: 16px; accent-color: #0a84ff; }
 
-#folder-select {
+#folder-select,
+.default-folder-row select {
   width: 100%;
-  padding: 10px;
+  min-width: 0;
+  padding: 12px 14px;
   background: #2c2c2e;
   color: #fff;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 8px;
-  font-size: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  font-size: 15px;
+  line-height: 1.3;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 38px;
+  box-sizing: border-box;
 }
 
+/* 通用按钮行（已弃用，保留兼容） */
 .row { display: flex; gap: 10px; margin-top: 4px; }
-
-button {
+.row button {
   flex: 1;
   padding: 10px;
   background: #0a84ff;
@@ -431,34 +573,135 @@ button {
   font-size: 14px;
   cursor: pointer;
 }
-
-button:active { opacity: 0.8; }
+.row button:active { opacity: 0.8; }
 
 #btnClose { background: #48484a; }
 
-/* 左侧面板 & 移动面板（共用样式） */
-#left-panel, #move-panel {
-  position: absolute;
+/* 左侧面板 / 删除确认弹窗 / 移动面板（共用遮罩样式）
+   注意：z-index 必须是 9999，与通用弹窗 #modal 对齐，否则在 iPhone / iPad Safari、
+   iOS 内嵌 WKWebView、NAS 远程桌面浏览器里，会被 <video> 元素、
+   #feed 遮罩层、TRAE 预览面板等压在底下 → 用户"左滑什么都看不到"。
+   之前误用 200，是被 feed 里元素盖掉的真正根因（CSS 重复定义时 200 覆盖了 9999）。 */
+#left-panel, #move-panel, #delete-modal {
+  position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
-  z-index: 35;
+  background: rgba(0,0,0,0.75);
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
+  animation: fadeIn 0.15s;
 }
-#left-panel.hidden, #move-panel.hidden { display: none; }
+#left-panel.hidden, #move-panel.hidden, #delete-modal.hidden { display: none; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+/* 删除确认弹窗 */
+.confirm-card {
+  background: #1c1c1e;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 300px;
+  padding: 28px 24px 20px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.08);
+  animation: scaleIn 0.18s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.confirm-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,59,48,0.12);
+  border-radius: 50%;
+  color: #ff3b30;
+}
+.confirm-icon svg { width: 28px; height: 28px; }
+.confirm-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 6px;
+}
+.confirm-desc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 22px;
+  line-height: 1.5;
+}
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+}
+.confirm-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.12s;
+  font-family: inherit;
+}
+.confirm-btn.cancel {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+.confirm-btn.cancel:active { opacity: 0.6; }
+.confirm-btn.danger {
+  background: #ff3b30;
+  color: #fff;
+}
+.confirm-btn.danger:active { opacity: 0.7; }
+
+@media (hover: hover) and (pointer: fine) {
+  .confirm-btn.cancel:hover { background: rgba(255,255,255,0.15); }
+  .confirm-btn.danger:hover { opacity: 0.85; }
+}
 
 .lp-card {
   background: #1c1c1e;
   border-radius: 14px;
-  padding: 20px;
+  padding: 18px;
+  padding-top: 40px;
   width: 100%;
-  max-width: 340px;
-  max-height: 80vh;
-  overflow-y: auto;
+  max-width: 380px;
+  min-height: 440px;       /* 新增：flex:1 子项需要父有明确最小高度，否则 NAS 旧浏览器下 move-list 会被 flex 压到 0 */
+  max-height: 85vh;        /* 原先 80vh → 加 5vh 让更多目录一屏可见 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid rgba(255,255,255,0.1);
+  position: relative;
 }
+@media (min-width: 600px) {
+  .lp-card { max-width: 480px; }
+}
+
+.lp-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: #8e8e93;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+}
+.lp-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.lp-close svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; }
 
 .lp-title {
   font-size: 13px;
@@ -484,23 +727,92 @@ button.secondary { background: #48484a; margin-top: 10px; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 35vh;
+  flex: 1 1 auto;           /* 原先 flex:1 → 改为 auto basis，不强制 basis=0，避免 NAS 旧 WebKit 把高度算成 0 */
+  min-height: 280px;        /* 原先 min-height:0 → 保底 280px，flex 再怎么分配也不会低于此值（彻底杜绝 height=0） */
+  max-height: calc(85vh - 160px); /* 新增：配合父 .lp-card 的 max-height:85vh，减去 title+hint+newfolder 约 160px 后给 list 留上限，超出直接滚动 */
+  width: 100%;
+  box-sizing: border-box;
   overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  /* 统一 WebKit (Safari/Chrome/新Edge) 滚动条皮肤，
+     避免 Linux/容器浏览器下显示出粗白原生滚动条 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.25) transparent;
 }
+.move-list::-webkit-scrollbar { width: 6px; }
+.move-list::-webkit-scrollbar-track { background: transparent; }
+.move-list::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.22);
+  border-radius: 3px;
+}
+.move-list::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.38); }
 
 .move-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
+  box-sizing: border-box;
   padding: 12px 14px;
-  background: rgba(255,255,255,0.06);
+  /* 提升背景对比度：从 6% → 18% 白色。
+     旧值 rgba(255,255,255,0.06) 在 NAS/Linux 浏览器+VNC 低色深下几乎与
+     lp-card #1c1c1e 背景融为一体，用户以为"子文件夹 div 全空"。 */
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   font-size: 14px;
   cursor: pointer;
+  gap: 10px;
+  /* 防止长路径名把 count 挤到看不见：左侧 span 允许省略 */
+  min-width: 0;
+  /* 滚动卡顿优化：contain 告诉浏览器此元素内部布局/paint/style 变化不影响外界，
+     transform:translateZ(0) 强制提升为独立合成层，滑动时 GPU 直接 blit，不走 repaint。 */
+  contain: layout paint style;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
-.move-item:active { background: rgba(255,255,255,0.12); }
-.move-item.current { border: 1px solid #0a84ff; }
-.move-item .count { font-size: 11px; opacity: 0.55; }
+@media (min-width: 600px) {
+  .move-item { padding: 14px 16px; font-size: 15px; }
+}
+.move-item:active { background: rgba(255,255,255,0.26); border-color: rgba(255,255,255,0.12); }
+.move-item:hover  { background: rgba(255,255,255,0.24); border-color: rgba(255,255,255,0.10); }
+.move-item.current {
+  border-color: #0a84ff;
+  background: rgba(10, 132, 255, 0.14);
+}
+.move-item > span:first-child {
+  /* 文件夹名侧：允许截断省略，避免把右侧 count 挤走 */
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.move-item > .count {
+  /* 数字侧：不收缩，保持可读性 */
+  flex-shrink: 0;
+  font-size: 11px;
+  opacity: 0.72;
+  background: rgba(0,0,0,0.28);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.move-item .ic {
+  display: inline-block;
+  width: 18px; height: 18px;
+  vertical-align: -3px;
+  margin-right: 6px;
+  color: #0a84ff;
+}
+.move-item .ic svg { width: 100%; height: 100%; display: block; }
+
+button.danger .btn-ic {
+  display: inline-block;
+  width: 18px; height: 18px;
+  vertical-align: -3px;
+  margin-right: 4px;
+}
 
 /* 新建文件夹行 */
 .new-folder-row {
@@ -521,4 +833,291 @@ button.secondary { background: #48484a; margin-top: 10px; }
 .new-folder-row button {
   flex: 0 0 auto;
   padding: 10px 16px;
+  background: #0a84ff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
 }
+.new-folder-row button:active { transform: scale(0.96); }
+.new-folder-row button:hover  { background: #409cff; }
+
+/* 顶部栏模式切换 */
+#mode-switch {
+  display: inline-flex;
+  gap: 2px;
+  background: rgba(0,0,0,0.35);
+  border-radius: 8px;
+  padding: 2px;
+  backdrop-filter: blur(8px);
+  margin-bottom: 4px;
+}
+.mode-btn {
+  padding: 4px 16px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.6);
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mode-btn.active {
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+}
+
+/* 图片 feed —— 与视频相同的 flex 纵向三槽位 + translateY 滑动 */
+#feed-image {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  z-index: 5;
+  background: #000;
+  /* 初始位移：translate3d 触发 GPU 合成层，丝滑不掉帧 */
+  transform: translate3d(0, -100%, 0);
+  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  touch-action: none;
+  will-change: transform;
+}
+#feed-image.animating {
+  will-change: transform;
+}
+#feed-image.hidden { display: none; }
+
+.slide-img {
+  flex: 0 0 100%;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.slide-img img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  display: block;
+}
+
+/* video-only：图片模式下隐藏 */
+.video-only { display: flex; }
+body.image-mode .video-only { display: none !important; }
+body.image-mode #feed { display: none !important; }
+
+/* 图片模式下隐藏进度条和暂停按钮 */
+body.image-mode #progress-wrap { display: none !important; }
+body.image-mode #play-badge { display: none !important; }
+
+/* 功能栏 */
+#funcbar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 48px;
+  padding: 0 24px;
+}
+.func-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  padding: 8px 18px 6px;
+  min-width: 64px;
+  min-height: 52px;
+  border-radius: 12px;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.func-btn:active { opacity: 0.7; }
+.func-btn .func-ic { line-height: 0; }
+.func-btn .func-ic svg { width: 26px; height: 26px; }
+.func-btn .func-label { font-size: 12px; font-weight: 500; }
+.func-btn.active {
+  color: #0a84ff;
+}
+.func-btn.active .func-ic svg { filter: drop-shadow(0 0 4px rgba(10,132,255,0.4)); }
+
+
+/* 默认文件夹行 */
+.default-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.default-folder-row label {
+  font-size: 14px;
+  min-width: 40px;
+  flex-shrink: 0;
+  opacity: 0.85;
+  color: #ebebf5;
+}
+.default-folder-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 当前文件夹行：下拉框 + 打开树状按钮并排 */
+.cur-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.cur-folder-row select {
+  flex: 1;
+  min-width: 0;
+}
+button.small {
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-top: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 图片模式 UI 隐藏 */
+body.ui-hidden #topbar,
+body.ui-hidden #sidebar,
+body.ui-hidden #bottombar {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.2s;
+}
+
+/* 文件夹左滑操作 */
+.swipe-item {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;            /* 新增：无论子卡片 flex 计算结果如何，wrapper 保底 44px，彻底杜绝 427x0 */
+  /* 滚动卡顿优化：同 .move-item，独立合成层 + contain */
+  contain: layout paint style;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+.move-list .swipe-item { margin-bottom: 4px; width: 100%; box-sizing: border-box; min-height: 44px; }
+.move-list > .move-item  { margin-bottom: 4px; width: 100%; box-sizing: border-box; min-height: 44px; } /* 根目录项间距 + 宽度与 .swipe-item 对齐 */
+.swipe-actions {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  z-index: 0;
+}
+.swipe-btn {
+  width: 40px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+}
+.swipe-btn svg { width: 18px; height: 18px; }
+.swipe-btn.rename { background: #0a84ff; }
+.swipe-btn.del { background: #ff3b30; }
+.swipe-content {
+  position: relative;
+  z-index: 1;
+  /* 与独立 .move-item 保持同色高对比度（18%白+细边框）。
+     旧 6% 白色在 NAS/VNC/低色深浏览器下几乎和 lp-card #1c1c1e 融为一体，
+     造成"子文件夹 div 啥都看不到"的错觉。 */
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: transform 0.2s, background 0.15s;
+  will-change: transform;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 8px;
+}
+.swipe-content:hover  { background: rgba(255,255,255,0.24); border-color: rgba(255,255,255,0.10); }
+.swipe-content:active { background: rgba(255,255,255,0.26); border-color: rgba(255,255,255,0.12); }
+
+/* 弹窗输入框 */
+.modal-input {
+  width: 100%;
+  padding: 8px 10px;
+  margin: 8px 0;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px;
+  background: rgba(0,0,0,0.3);
+  color: #fff;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.modal-input:focus {
+  outline: none;
+  border-color: #0a84ff;
+}
+
+/* ==================== PC / 大屏适配 ==================== */
+/* 桌面端鼠标 hover 状态（触屏设备 :hover 不触发，不影响） */
+@media (hover: hover) and (pointer: fine) {
+  .func-btn:hover { opacity: 0.85; }
+  .func-btn.active:hover { opacity: 1; }
+  .side-btn:hover .icon { background: rgba(255,255,255,0.18); }
+  .move-item:hover { background: rgba(255,255,255,0.12); }
+  .settings-btn:hover { background: rgba(10,132,255,0.25); }
+  .swipe-content:hover { background: rgba(255,255,255,0.12); }
+  .lp-close:hover { background: rgba(255,255,255,0.1); color: #fff; }
+}
+
+/* 大屏（PC/平板横屏）：限制内容宽度，居中布局更舒适 */
+@media (min-width: 768px) {
+  /* 功能栏按钮间距加大，触控/点击更舒适 */
+  #funcbar, #funcbar-settings { gap: 72px; }
+  .func-btn { padding: 10px 22px 8px; min-width: 72px; min-height: 56px; }
+  .func-btn .func-ic svg { width: 28px; height: 28px; }
+  .func-btn .func-label { font-size: 13px; }
+
+  /* 右侧操作栏图标放大 */
+  .side-btn .icon { width: 48px; height: 48px; }
+  .side-btn .icon svg { width: 24px; height: 24px; }
+
+  /* 设置面板内容居中，限制最大宽度 */
+  #settings-panel { align-items: center; }
+  .settings-header { max-width: 640px; width: 100%; }
+  .panel-card { max-width: 640px; width: 100%; align-self: center; }
+
+  /* 弹窗卡片宽度 */
+  .lp-card { max-width: 480px; }
+}
+
+@media (min-width: 1024px) {
+  /* 超宽屏：功能栏间距进一步加大 */
+  #funcbar, #funcbar-settings { gap: 96px; }
+  .panel-card { max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; padding: 12px 28px 28px; }
+  .settings-header { max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; padding-left: 28px; padding-right: 28px; }
+}
+
+/* PC 端禁用文本选择高亮色，保持黑色背景一致性 */
+@media (hover: hover) and (pointer: fine) {
+  ::selection { background: rgba(10,132,255,0.3); }
+}
+

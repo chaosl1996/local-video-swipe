@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>本地视频</title>
-  <link rel="stylesheet" href="/style.css?v=13" />
+  <link rel="stylesheet" href="/style.css?v=62" />
 </head>
 <body>
   <div id="app">
@@ -14,8 +14,17 @@
       <div class="slide active" data-slot="current"><video playsinline webkit-playsinline preload="none"></video></div>
       <div class="slide" data-slot="next"><video playsinline webkit-playsinline preload="none"></video></div>
     </div>
+    <!-- 图片容器：三个 slot，与视频相同的滑动动画 -->
+    <div id="feed-image" class="hidden">
+      <div class="slide-img" data-islot="prev"><img></div>
+      <div class="slide-img" data-islot="current"><img></div>
+      <div class="slide-img" data-islot="next"><img></div>
+    </div>
     <!-- 触摸/鼠标捕获层：覆盖整个视频区，统一处理所有手势，与 video 元素完全解耦 -->
     <div id="touch-layer"></div>
+
+    <!-- seek 预览画布：手机端暂停 seek 时用 canvas.drawImage 直接画出解码帧，彻底绕开浏览器"暂停态不刷新画面"的 bug -->
+    <canvas id="seek-preview"></canvas>
 
     <!-- 顶部状态栏 -->
     <div id="topbar">
@@ -24,21 +33,21 @@
 
     <!-- 右侧操作栏 -->
     <div id="sidebar">
-      <div class="side-btn" id="btnMute" title="静音/取消静音">
-        <span class="icon">🔇</span><span class="label">静音</span>
+      <div class="side-btn video-only" id="btnMute" title="静音/取消静音">
+        <span class="icon"></span><span class="label">静音</span>
       </div>
-      <div class="side-btn" id="btnFullscreen" title="全屏">
-        <span class="icon">⛶</span><span class="label">全屏</span>
+      <div class="side-btn video-only" id="btnFullscreen" title="全屏">
+        <span class="icon"></span><span class="label">全屏</span>
       </div>
-      <div class="side-btn" id="btnSettings" title="设置">
-        <span class="icon">⚙️</span><span class="label">设置</span>
+      <div class="side-btn" id="btnDelete" title="删除当前文件">
+        <span class="btn-ic"></span><span class="label">删除</span>
       </div>
     </div>
 
-    <!-- 底部信息 + 进度条 -->
+    <!-- 底部信息 + 进度条 + 功能栏 -->
     <div id="bottombar">
       <div id="info"></div>
-      <div id="progress-wrap">
+      <div id="progress-wrap" class="video-only">
         <span id="time-current">0:00</span>
         <div id="progress-bar">
           <div id="progress-buffered"></div>
@@ -47,86 +56,169 @@
         </div>
         <span id="time-total">0:00</span>
       </div>
-      <div id="hint">上滑下一个 · 单击暂停 · 长按快进 · 右滑删除 · 左滑移动</div>
+      <!-- 功能栏：视频/照片/设置 -->
+      <div id="funcbar">
+        <button class="func-btn active" data-mode="video" id="btnFuncVideo">
+          <span class="func-ic"></span><span class="func-label">视频</span>
+        </button>
+        <button class="func-btn" data-mode="image" id="btnFuncImage">
+          <span class="func-ic"></span><span class="func-label">照片</span>
+        </button>
+        <button class="func-btn" id="btnFuncSettings">
+          <span class="func-ic"></span><span class="func-label">设置</span>
+        </button>
+      </div>
     </div>
 
     <!-- 格式不支持提示 -->
     <div id="error-badge" class="hidden">
-      <div class="err-icon">⚠️</div>
-      <div class="err-text">该视频格式浏览器无法直接播放</div>
+      <div class="err-icon"></div>
+      <div class="err-text">该文件格式浏览器无法直接播放</div>
       <div class="err-hint">建议转换为 MP4 (H.264 + AAC)</div>
       <button id="btnConvert" class="convert-btn hidden">转换为 MP4</button>
       <div id="convert-status" class="convert-status hidden"></div>
     </div>
 
-    <!-- 长按快进提示 -->
-    <div id="speed-badge">2.0x ⏩</div>
+    <!-- 长按拖拽提示（进度/变速） -->
+    <div id="speed-badge"></div>
 
     <!-- 暂停状态提示 -->
-    <div id="play-badge">▶</div>
+    <div id="play-badge"></div>
 
-    <!-- 左侧操作栏（右滑出现：删除当前视频） -->
-    <div id="left-panel" class="hidden">
-      <div class="lp-card">
-        <div class="lp-title">视频操作</div>
-        <button id="btnDelete" class="danger">🗑️ 删除当前视频</button>
-        <div class="lp-hint">删除后不可恢复</div>
-        <button id="btnLeftClose" class="secondary">取消</button>
-      </div>
-    </div>
+  </div>
 
-    <!-- 文件夹移动面板（左滑出现） -->
-    <div id="move-panel" class="hidden">
-      <div class="lp-card">
-        <div class="lp-title">移动到文件夹</div>
-        <div id="move-folder-list" class="move-list"></div>
-        <div class="lp-title" style="margin-top:14px;">或新建文件夹</div>
-        <div class="new-folder-row">
-          <input type="text" id="new-folder-input" placeholder="文件夹名" maxlength="40" />
-          <button id="btnNewFolder">新建</button>
-        </div>
-        <button id="btnMoveClose" class="secondary">取消</button>
-      </div>
-    </div>
-
-    <!-- 设置面板 -->
-    <div id="settings-panel" class="hidden">
-      <div class="panel-card">
-        <div class="panel-title">播放模式</div>
-        <div class="mode-list">
-          <label><input type="radio" name="mode" value="all-random" /> 全随机（所有文件夹）</label>
-          <label><input type="radio" name="mode" value="folder-random" checked /> 文件夹内随机</label>
-          <label><input type="radio" name="mode" value="folder-seq" /> 文件夹内顺序</label>
-        </div>
-
-        <div class="panel-title" style="margin-top:16px;">文件夹</div>
-        <select id="folder-select"></select>
-
-        <div class="panel-title" style="margin-top:16px;">播放选项</div>
-        <label class="opt-toggle">
-          <input type="checkbox" id="opt-autonext" checked />
-          <span>播放完自动翻到下一个</span>
-        </label>
-
-        <div class="panel-title" style="margin-top:16px;">操作</div>
-        <div class="row">
-          <button id="btnRefresh">刷新目录</button>
-          <button id="btnClose">关闭</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 自定义确认/提示弹窗（替代原生 confirm/alert，可限制宽度） -->
-    <div id="modal" class="overlay hidden">
-      <div class="modal-card">
-        <div id="modalMsg" class="modal-msg"></div>
-        <div class="modal-actions">
-          <button id="modalCancel" class="btn-secondary">取消</button>
-          <button id="modalOk" class="btn-danger">确定</button>
-        </div>
+  <!-- 全局弹窗：必须在 #app 之外，否则设置页面（隐藏 #app）时弹窗不可见 -->
+  <div id="modal" class="overlay hidden">
+    <div class="modal-card">
+      <div id="modalMsg" class="modal-msg"></div>
+      <input type="text" id="modalInput" class="modal-input hidden" maxlength="40" />
+      <div class="modal-actions">
+        <button id="modalCancel" class="btn-secondary">取消</button>
+        <button id="modalOk" class="btn-danger">确定</button>
       </div>
     </div>
   </div>
-  <script src="/app.js?v=13"></script>
+
+  <!-- 删除确认弹窗（必须在 #app 之外，全屏和设置页时也能显示） -->
+  <div id="delete-modal" class="hidden">
+    <div class="confirm-card">
+      <div class="confirm-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+      </div>
+      <div class="confirm-title">删除文件</div>
+      <div class="confirm-desc">删除后不可恢复，确认删除？</div>
+      <div class="confirm-actions">
+        <button id="btnLeftCancel" class="confirm-btn cancel">取消</button>
+        <button id="btnConfirmDelete" class="confirm-btn danger">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 左侧文件夹面板：用户向右滑（左滑面板）打开 → 浏览所有文件夹，点一下就切换当前目录（之前误把删除确认弹窗塞这了，导致左滑啥都看不到） -->
+  <div id="left-panel" class="hidden">
+    <div class="lp-card">
+      <button class="lp-close" id="btnLeftClose" aria-label="关闭"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <div class="lp-title">切换文件夹</div>
+      <div id="folder-list" class="move-list"></div>
+      <div class="lp-hint">点击文件夹即可切换当前目录播放</div>
+    </div>
+  </div>
+
+  <!-- 文件夹移动面板（必须在 #app 之外，全屏和设置页时也能显示） -->
+  <div id="move-panel" class="hidden">
+    <div class="lp-card">
+      <button class="lp-close" id="btnMoveClose" aria-label="关闭"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <div class="lp-title">移动到文件夹</div>
+      <div id="move-folder-list" class="move-list"></div>
+      <div class="lp-hint">左滑文件夹可直接删除</div>
+      <div class="lp-title" style="margin-top:14px;">或新建文件夹</div>
+      <div class="new-folder-row">
+        <input type="text" id="new-folder-input" placeholder="文件夹名" maxlength="40" />
+        <button id="btnNewFolder">新建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置面板：与 #app 同级，完全独立的页面 -->
+  <div id="settings-panel" class="hidden">
+    <div class="panel-card">
+      <div class="settings-header">设置</div>
+
+      <div class="settings-group">
+        <div class="panel-title">播放模式</div>
+        <div class="mode-list">
+          <label><input type="radio" name="mode" value="all-random" /> 全目录洗牌（刷新后固定顺序，可回溯）</label>
+          <label><input type="radio" name="mode" value="folder-random" checked /> 文件夹内洗牌（刷新后固定顺序，可回溯）</label>
+          <label><input type="radio" name="mode" value="folder-seq" /> 文件夹内字母顺序</label>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="panel-title">当前文件夹</div>
+        <div class="cur-folder-row">
+          <select id="folder-select" style="flex:1"></select>
+          <button id="btnOpenFolderTree" type="button" class="secondary small" title="打开树状文件夹列表">📁 浏览</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="panel-title">默认文件夹</div>
+        <div class="default-folder-row">
+          <label>视频</label>
+          <select id="default-video-folder"></select>
+        </div>
+        <div class="default-folder-row">
+          <label>图片</label>
+          <select id="default-image-folder"></select>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="panel-title">图片自动切换</div>
+        <div class="slider-row">
+          <input type="range" id="opt-image-interval" min="0" max="30" step="1" value="0" />
+          <span id="image-interval-label">关闭</span>
+        </div>
+        <div class="panel-title" style="margin-top:14px;">播放选项</div>
+        <label class="opt-toggle">
+          <input type="checkbox" id="opt-autonext" checked />
+          <span>视频播放完自动翻到下一个</span>
+        </label>
+      </div>
+
+      <div class="settings-group" id="auth-section">
+        <div class="panel-title">访问密码</div>
+        <div id="auth-status-text" class="auth-status">加载中…</div>
+        <div class="new-folder-row" style="margin-top:10px;">
+          <input type="password" id="auth-password-input" placeholder="输入新密码" maxlength="40" />
+          <button id="btnSavePassword">保存</button>
+        </div>
+        <button id="btnClearPassword" class="settings-btn" style="margin-top:8px; width:100%;">清除密码</button>
+        <div class="lp-hint" style="margin-top:8px;">留空保存=无密码访问。忘记密码可在容器内编辑 .auth_password 文件或设置 AUTH_PASSWORD 环境变量。</div>
+      </div>
+
+      <div class="settings-group">
+        <div class="panel-title">操作</div>
+        <div class="settings-btns">
+          <button id="btnHelp" class="settings-btn">操作说明</button>
+          <button id="btnRefresh" class="settings-btn">刷新目录</button>
+        </div>
+      </div>
+    </div>
+    <!-- 底部功能栏（与主页面一致，点击视频/照片退出设置） -->
+    <div id="funcbar-settings">
+      <button class="func-btn" data-mode="video" id="btnSettingsVideo">
+        <span class="func-ic"></span><span class="func-label">视频</span>
+      </button>
+      <button class="func-btn" data-mode="image" id="btnSettingsImage">
+        <span class="func-ic"></span><span class="func-label">照片</span>
+      </button>
+      <button class="func-btn active" id="btnSettingsSettings">
+        <span class="func-ic"></span><span class="func-label">设置</span>
+      </button>
+    </div>
+  </div>
+
+  <script src="/app.js?v=62"></script>
 </body>
 </html>

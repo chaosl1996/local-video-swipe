@@ -1,0 +1,26 @@
+name: Deploy to NAS
+
+# 推送到 main 分支时自动部署到群晖 NAS
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH Deploy to Synology NAS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.NAS_HOST }}
+          port: ${{ secrets.NAS_PORT }}
+          username: ${{ secrets.NAS_USER }}
+          key: ${{ secrets.NAS_KEY }}
+          script: |
+            cd ${{ secrets.NAS_PATH }}
+            git pull origin main
+            docker compose down
+            docker compose up -d --build
+            docker image prune -f
+            echo "Deploy completed at $(date)"
