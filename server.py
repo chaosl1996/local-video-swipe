@@ -162,6 +162,8 @@ def build_index():
                     'abs': abs_path,
                     'folder': folder,
                     'name': f,
+                    # 'native' = 浏览器可直接播放 (mp4/m4v/webm)；'convert' = 需 ffmpeg 转码
+                    'format': 'native' if ext in ('.mp4', '.m4v', '.webm') else 'convert',
                 }
                 vids.append(file_id)
             elif ext in IMAGE_EXT:
@@ -564,7 +566,7 @@ body { display: flex; align-items: center; justify-content: center; padding: 20p
     def api_folders(self):
         folders = build_index()
         # 直接返回所有视频/图片列表，避免前端逐个文件夹发请求（慢）
-        videos = [{'id': vid_id, 'folder': m['folder'], 'name': m['name']}
+        videos = [{'id': vid_id, 'folder': m['folder'], 'name': m['name'], 'format': m['format']}
                   for vid_id, m in VIDEO_INDEX.items()]
         images = [{'id': img_id, 'folder': m['folder'], 'name': m['name']}
                   for img_id, m in IMAGE_INDEX.items()]

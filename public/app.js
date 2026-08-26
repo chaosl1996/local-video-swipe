@@ -1,5 +1,5 @@
 // ==================== 状态 ====================
-console.log('[app.js v68] loaded at', new Date().toISOString());
+console.log('[app.js v70] loaded at', new Date().toISOString());
 const state = {
   folders: [],          // [{ folder, count }]
   allVideos: [],        // [{ id, folder, name }]
@@ -29,12 +29,9 @@ const state = {
   dragStartRateIdx: 2,      // SPEED_LEVELS 索引
 
   mediaType: localStorage.getItem('mediaType') || 'video',  // 'video' | 'image'
-  allImages: [],            // [{ id, folder, name }]
-  imageQueue: [],
-  imageQueueIndex: -1,
-  imageSlots: { prev: null, current: null, next: null },
   defaultVideoFolder: localStorage.getItem('defaultVideoFolder') || '__all__',
   defaultImageFolder: localStorage.getItem('defaultImageFolder') || '__all__',
+  allImages: [],            // [{ id, folder, name }]
   uiHidden: false,          // 图片模式下单击隐藏/显示 UI
   imageAutoInterval: parseInt(localStorage.getItem('imageAutoInterval') || '0', 10), // 0=不自动切换
   imageAutoTimer: null,     // 图片自动切换定时器
@@ -477,28 +474,28 @@ function buildImageQueue() {
   }
   console.log('[buildImageQueue] folder:', state.selectedFolder, 'pool:', pool.length, 'total images:', state.allImages.length);
   if (state.mode === 'folder-seq') {
-    state.imageQueue = pool.slice().sort((a, b) =>
+    state.queue = pool.slice().sort((a, b) =>
       (a.folder + '/' + a.name).localeCompare(b.folder + '/' + b.name)
     );
   } else {
     // 洗牌列表模式：刷新时生成一次固定顺序的随机队列，可回溯
-    state.imageQueue = shuffle(pool);
+    state.queue = shuffle(pool);
   }
-  state.imageQueueIndex = state.imageQueue.length > 0 ? 0 : -1;
+  state.queueIndex = state.queue.length > 0 ? 0 : -1;
 }
 
 function peekNextImage(currentId) {
-  if (state.imageQueue.length === 0) return null;
-  const idx = state.imageQueue.findIndex((v) => v.id === currentId);
-  if (idx === -1) return state.imageQueue[0];
-  return state.imageQueue[(idx + 1) % state.imageQueue.length];
+  if (state.queue.length === 0) return null;
+  const idx = state.queue.findIndex((v) => v.id === currentId);
+  if (idx === -1) return state.queue[0];
+  return state.queue[(idx + 1) % state.queue.length];
 }
 
 function peekPrevImage(currentId) {
-  if (state.imageQueue.length === 0) return null;
-  const idx = state.imageQueue.findIndex((v) => v.id === currentId);
-  if (idx === -1) return state.imageQueue[0];
-  return state.imageQueue[(idx - 1 + state.imageQueue.length) % state.imageQueue.length];
+  if (state.queue.length === 0) return null;
+  const idx = state.queue.findIndex((v) => v.id === currentId);
+  if (idx === -1) return state.queue[0];
+  return state.queue[(idx - 1 + state.queue.length) % state.queue.length];
 }
 
 function imgSrcOf(img) {
@@ -509,10 +506,10 @@ function loadImageSlot(slotName, imgMeta) {
   const img = imgs[slotName];
   if (!imgMeta) {
     if (img.getAttribute('src')) { img.src = ''; img.removeAttribute('src'); }
-    state.imageSlots[slotName] = null;
+    state.slots[slotName] = null;
     return;
   }
-  state.imageSlots[slotName] = imgMeta;
+  state.slots[slotName] = imgMeta;
   // src 相同时跳过，避免重复 set 导致浏览器重请求/闪烁
   const target = imgSrcOf(imgMeta);
   // img.src 会返回完整绝对URL，用 endsWith 匹配路径
@@ -521,7 +518,7 @@ function loadImageSlot(slotName, imgMeta) {
 }
 
 function showCurrentImage() {
-  const cur = state.imageSlots.current;
+  const cur = state.slots.current;
   if (!cur) return;
   errorBadge.classList.add('hidden');
   updateInfo();
@@ -538,7 +535,7 @@ function fillImageSlots(centerImg) {
 // 而是直接在 DOM 元素间复制已解码的 src，只真正加载新的远端边缘 slot。
 function goToImage(direction) {
   if (state.animating) return;
-  if (state.imageQueue.length <= 1) return;
+  if (state.queue.length <= 1) return;
   state.animating = true;
   feedImage.classList.add('animating');
   // 基准 translateY(-100%) 让 current 显示。向上滑 -> -200%（看 next）；向下滑 -> 0%（看 prev）
@@ -548,8 +545,8 @@ function goToImage(direction) {
   setTimeout(() => {
     let newCurrentMeta, oldCurrentMeta, farMeta;
     if (direction === 1) {
-      newCurrentMeta = state.imageSlots.next || peekNextImage(state.imageSlots.current && state.imageSlots.current.id);
-      oldCurrentMeta = state.imageSlots.current;
+      newCurrentMeta = state.slots.next || peekNextImage(state.slots.current && state.slots.current.id);
+      oldCurrentMeta = state.slots.current;
       farMeta = peekNextImage(newCurrentMeta ? newCurrentMeta.id : null);
       // DOM 迁移：next 的图片已在可见位置，直接搬 current/prev 的内容
       // prev <- oldCurrent（搬 current 的 decoded 图像）
@@ -557,9 +554,9 @@ function goToImage(direction) {
       // current <- newCurrent（搬 next 的 decoded 图像）
       if (imgs.next.src) { imgs.current.src = imgs.next.src; } else { imgs.current.removeAttribute('src'); }
       // next <- 新 farMeta（唯一可能需要重新加载的）
-      state.imageSlots.prev = oldCurrentMeta;
-      state.imageSlots.current = newCurrentMeta;
-      state.imageSlots.next = farMeta;
+      state.slots.prev = oldCurrentMeta;
+      state.slots.current = newCurrentMeta;
+      state.slots.next = farMeta;
       if (farMeta) {
         const tgt = imgSrcOf(farMeta);
         if (!imgs.next.src || !imgs.next.src.endsWith(tgt)) imgs.next.src = tgt;
@@ -567,15 +564,15 @@ function goToImage(direction) {
         imgs.next.removeAttribute('src');
       }
     } else {
-      newCurrentMeta = state.imageSlots.prev || peekPrevImage(state.imageSlots.current && state.imageSlots.current.id);
-      oldCurrentMeta = state.imageSlots.current;
+      newCurrentMeta = state.slots.prev || peekPrevImage(state.slots.current && state.slots.current.id);
+      oldCurrentMeta = state.slots.current;
       farMeta = peekPrevImage(newCurrentMeta ? newCurrentMeta.id : null);
       // DOM 迁移：prev 的图片已在可见位置，搬
       if (imgs.current.src) { imgs.next.src = imgs.current.src; } else { imgs.next.removeAttribute('src'); }
       if (imgs.prev.src) { imgs.current.src = imgs.prev.src; } else { imgs.current.removeAttribute('src'); }
-      state.imageSlots.next = oldCurrentMeta;
-      state.imageSlots.current = newCurrentMeta;
-      state.imageSlots.prev = farMeta;
+      state.slots.next = oldCurrentMeta;
+      state.slots.current = newCurrentMeta;
+      state.slots.prev = farMeta;
       if (farMeta) {
         const tgt = imgSrcOf(farMeta);
         if (!imgs.prev.src || !imgs.prev.src.endsWith(tgt)) imgs.prev.src = tgt;
@@ -602,7 +599,7 @@ function goToImage(direction) {
 function resetImageAutoTimer() {
   if (state.imageAutoTimer) { clearTimeout(state.imageAutoTimer); state.imageAutoTimer = null; }
   if (state.mediaType !== 'image' || state.imageAutoInterval <= 0) return;
-  if (state.imageQueue.length === 0) return;
+  if (state.queue.length === 0) return;
   state.imageAutoTimer = setTimeout(() => {
     goToImage(1);
   }, state.imageAutoInterval * 1000);
@@ -625,7 +622,7 @@ function switchMode(type) {
     document.body.classList.add('image-mode');
     feedImage.classList.remove('hidden');
     // 应用图片默认文件夹
-    state.selectedFolder = state.defaultImageFolder;
+    state.selectedFolder = state.mediaType === 'image' ? state.defaultImageFolder : state.defaultVideoFolder;
     rebuildAndPlay();
     resetImageAutoTimer();
   } else {
@@ -633,7 +630,7 @@ function switchMode(type) {
     document.body.classList.remove('image-mode');
     feedImage.classList.add('hidden');
     // 应用视频默认文件夹
-    state.selectedFolder = state.defaultVideoFolder;
+    state.selectedFolder = state.mediaType === 'image' ? state.defaultImageFolder : state.defaultVideoFolder;
     rebuildAndPlay();
   }
 
@@ -789,7 +786,7 @@ const MIME_BY_EXT = {
 // 不在白名单里的（avi/mkv/wmv/rmvb/flv/3gp/m2ts/dat/vob 等）一律直接判 false，
 // 强制走转码流程 — 彻底避免 canPlayType('video/x-msvideo') 某些版本返回
 // 'maybe' 让我们误判「可能支持」，结果 avi 走到 play() 被 reject 用户还要手动点转码。
-const NATIVE_CONTAINER_WHITELIST = new Set(['.mp4', '.m4v', '.webm', '.ogv', '.ogg']);
+const NATIVE_CONTAINER_WHITELIST = new Set(['.mp4', '.m4v', '.webm']);
 
 function canBrowserPlay(meta) {
   if (!meta || !meta.name) return true;
@@ -853,15 +850,22 @@ function loadSlot(slotName, videoMeta) {
   try { v.removeAttribute('src'); } catch(_) {}
   // 只有 current 需要立即触发加载；prev/next 完全不加载
   if (slotName === 'current') {
+    // 提前检查：服务端 format === 'convert'（.mov/.avi/.mkv 等）→ 直接转码，
+    // 不浪费带宽加载视频，也不触发 canPlayType 的误判
+    // 老服务器不带 format 字段时 format 为 undefined，跳过此检查
+    if (videoMeta.format === 'convert') {
+      console.warn('[video] 服务端标注需转码 →', videoMeta.name);
+      startAutoConvert(videoMeta, 'format-mime');
+      try { v.pause(); } catch(_) {}
+      return;
+    }
     requestAnimationFrame(() => {
       // 二次校验：到 rAF 这帧时 id 必须仍是同一个（防止用户又换了视频）
       if (v._loadedId !== videoMeta.id) return;
       v.preload = 'auto';   // current 正常加载
       v.src = newSrc;
-      // 预判格式支持：容器级 MIME 黑名单（如 avi/mkv 在某些 Linux 容器浏览器里被直接拒绝）
-      // 注意：mp4 容器 canPlayType='probably' 不等于真能解视频流！H.265/HEVC 视频 + AAC
-      // 音频的 mp4，Chrome/Safari 都会返回 probably/maybe，但实际 videoWidth=0（只有音轨）。
-      // 真正的视频解码检测放在 onloadedmetadata（videoWidth===0）里。
+      // mp4 容器 canPlayType='probably' 不等于真能解视频流！H.265/HEVC 视频的
+      // videoWidth=0 检测在 onloadedmetadata 里做。
       if (!canBrowserPlay(videoMeta)) {
         // 【自动转码点 1】容器白名单外 / canPlayType 明确判 false → 直接转码，不再让用户手动点
         console.warn('[video] canPlayType 明确不支持该容器 → 自动转码', videoMeta.name);
@@ -1041,15 +1045,15 @@ function syncPlayBadge() {
 
 function updateInfo() {
   if (state.mediaType === 'image') {
-    const cur = state.imageSlots.current;
+    const cur = state.slots.current;
     if (!cur) {
       indicator.textContent = '没有图片';
       infoEl.textContent = '请把图片放入 ./videos 目录';
       return;
     }
-    const idx = state.imageQueue.findIndex((v) => v.id === cur.id);
+    const idx = state.queue.findIndex((v) => v.id === cur.id);
     indicator.textContent =
-      `${idx >= 0 ? idx + 1 : '?'} / ${state.imageQueue.length} · ${cur.folder}`;
+      `${idx >= 0 ? idx + 1 : '?'} / ${state.queue.length} · ${cur.folder}`;
     infoEl.textContent = cur.name;
     return;
   }
@@ -1606,7 +1610,7 @@ function showDeleteModal() {
 }
 
 function showMovePanel() {
-  const cur = state.mediaType === 'image' ? state.imageSlots.current : state.slots.current;
+  const cur = state.mediaType === 'image' ? state.slots.current : state.slots.current;
   if (!cur) return;
   movePanel.style.setProperty('z-index', '9999', 'important');
   movePanel.classList.remove('hidden');              // 先显示面板（父 display:flex，有真实尺寸）
@@ -1740,15 +1744,20 @@ function renderLeftFolderList() {
 // 切换当前目录（重建队列 + 自动播放第一个）
 function switchFolder(folder) {
   state.selectedFolder = folder;
-  state.defaultFolder = state.defaultFolder || {};
-  state.defaultFolder[state.mediaType] = folder;
+  if (state.mediaType === 'image') {
+    state.defaultImageFolder = folder;
+    localStorage.setItem('defaultImageFolder', folder);
+  } else {
+    state.defaultVideoFolder = folder;
+    localStorage.setItem('defaultVideoFolder', folder);
+  }
   saveState();
   leftPanel.classList.add('hidden');
   rebuildAndPlay();
 }
 
 function renderMoveFolderList() {
-  const cur = state.mediaType === 'image' ? state.imageSlots.current : state.slots.current;
+  const cur = state.mediaType === 'image' ? state.slots.current : state.slots.current;
   moveFolderList.innerHTML = '';
   const frag = document.createDocumentFragment();
 
@@ -1855,7 +1864,7 @@ function escapeHtml(s) {
 // ==================== 重命名文件 ====================
 async function renameCurrentFile() {
   const isImage = state.mediaType === 'image';
-  const cur = isImage ? state.imageSlots.current : state.slots.current;
+  const cur = isImage ? state.slots.current : state.slots.current;
   if (!cur) return;
   const oldName = cur.name;
   // 去掉扩展名作为默认值
@@ -1881,10 +1890,10 @@ async function renameCurrentFile() {
     }
     // 更新 slots
     if (isImage) {
-      Object.keys(state.imageSlots).forEach((k) => {
-        if (state.imageSlots[k] && state.imageSlots[k].id === cur.id) {
-          state.imageSlots[k].id = data.new_id;
-          state.imageSlots[k].name = data.new_name;
+      Object.keys(state.slots).forEach((k) => {
+        if (state.slots[k] && state.slots[k].id === cur.id) {
+          state.slots[k].id = data.new_id;
+          state.slots[k].name = data.new_name;
         }
       });
     } else {
@@ -1937,7 +1946,7 @@ attachLongPress(infoEl, renameCurrentFile);
 
 // 长按顶部文件夹名 → 重命名文件夹
 attachLongPress(indicator, () => {
-  const cur = state.mediaType === 'image' ? state.imageSlots.current : state.slots.current;
+  const cur = state.mediaType === 'image' ? state.slots.current : state.slots.current;
   if (!cur || cur.folder === '/' || cur.folder === '__all__') return;
   renameFolder(cur.folder);
 });
@@ -1968,7 +1977,7 @@ function deleteCurrentItem() {
 }
 
 async function deleteCurrentImage() {
-  const cur = state.imageSlots.current;
+  const cur = state.slots.current;
   if (!cur) return;
   try {
     const r = await fetch('/api/images/' + cur.id, { method: 'DELETE' });
@@ -1986,7 +1995,7 @@ async function deleteCurrentImage() {
 
 async function moveCurrentTo(destFolder) {
   const isImage = state.mediaType === 'image';
-  const cur = isImage ? state.imageSlots.current : state.slots.current;
+  const cur = isImage ? state.slots.current : state.slots.current;
   if (!cur) return;
   if (cur.folder === destFolder) {
     movePanel.classList.add('hidden');
@@ -2010,7 +2019,7 @@ async function moveCurrentTo(destFolder) {
       if (data.new_name) item.name = data.new_name;
     }
     // 同步 slots 中可能存在的引用（prev/next 预加载）
-    const slots = isImage ? state.imageSlots : state.slots;
+    const slots = isImage ? state.slots : state.slots;
     ['prev', 'current', 'next'].forEach((k) => {
       if (slots[k] && slots[k].id === cur.id) {
         slots[k].id = data.new_id;
@@ -2351,8 +2360,8 @@ defaultImageFolderSelect.addEventListener('change', () => {
 function rebuildAndPlay() {
   if (state.mediaType === 'image') {
     buildImageQueue();
-    if (state.imageQueue.length > 0) {
-      fillImageSlots(state.imageQueue[0]);
+    if (state.queue.length > 0) {
+      fillImageSlots(state.queue[0]);
       showCurrentImage();
       resetImageAutoTimer();
     } else {
@@ -2673,7 +2682,7 @@ async function init() {
   if (state.mediaType === 'image') {
     document.body.classList.add('image-mode');
     feedImage.classList.remove('hidden');
-    state.selectedFolder = state.defaultImageFolder;
+    state.selectedFolder = state.mediaType === 'image' ? state.defaultImageFolder : state.defaultVideoFolder;
     folderSelect.value = state.selectedFolder;
     funcButtons.forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.mode === 'image');
@@ -2753,6 +2762,11 @@ if (AUTO_CONVERT_ENABLED) {
   });
 }
 // ============================================================================
+// 🔁 转码模块（手动按钮）结束
+// ============================================================================
+
+init();
+=========================
 // 🔁 转码模块（手动按钮）结束
 // ============================================================================
 
